@@ -1,0 +1,30 @@
+# Secrets
+.env
+*.env
+auth.json
+secrets.py
+notion_token*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+ENV/
+
+# Build / temp
+*.egg-info/
+dist/
+build/
+*.log
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+*.txt
+*.csv
