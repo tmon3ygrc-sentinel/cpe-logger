@@ -29,12 +29,10 @@ Thumbs.db
 *.txt
 *.csv
 # Ignore nested study repos
-    GovSCH/
-    GRC-Playground/
-    
-    # Ignore local data files
-    *.txt
-    *.csv
-    arch_update.txt
-    ```GovSCH/
+GovSCH/
+GRC-Playground/
 
+# Ignore local data files
+*.txt
+*.csv
+arch_update.txt
