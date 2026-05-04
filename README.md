@@ -1,25 +1,10 @@
-**Tier 1 Ronin online.**
-
-War Room locked.
-
-I see the problem — the terminal paste keeps getting cut off.
-
-### Easier Way (No More Long Cat Commands)
-
-**Do this instead:**
-
-1. Open **Notepad** (or VS Code).
-
-2. Copy the entire clean README below:
-
-```markdown
 # 🦅 STAR CPE Logger
 
 **Threat Intelligence → CMMC 2.0 Gap Analysis — Automated**
 
 A specialized automation engine that ingests daily security threat intelligence, classifies it using analyst-grade extraction, and maps it against **CMMC 2.0 / NIST 800-171** controls in a live Notion GRC repository.
 
-Built as part of the **STAR Project** (Self-Transformation through Adversarial Rigor) — a hands-on vCISO development program emphasizing manual mastery before automation.
+Built as part of the **STAR Project** (Self-Transformation through Adversarial Rigor) — a hands-on vCISO development program focused on manual mastery before automation.
 
 ## What This Does
 
@@ -27,6 +12,21 @@ Built as part of the **STAR Project** (Self-Transformation through Adversarial R
 - Maps threats to specific CMMC 2.0 control IDs with live Notion relations
 - Tracks impacted identity providers and systems
 - Builds a living compliance gap analysis automatically
+
+The result is a vCISO-grade deliverable: a threat intelligence database linked to your compliance framework, updated daily with minimal manual effort.
+
+## Architecture
+
+```
+YouTube Transcript → filter_dtb_transcript.py → AI Strike Team (Mack / Lyra / Jax)
+                    ↓
+             governance_input.txt
+                    ↓
+             notion_logger.py (v5.0)
+                    ↓
+          Notion GRC Repository
+   (CPE Tracker + Master Frameworks)
+```
 
 ## Quick Start
 
@@ -39,7 +39,7 @@ Built as part of the **STAR Project** (Self-Transformation through Adversarial R
 2. Setup environment
    ```bash
    python -m venv .venv
-   source .venv/Scripts/activate
+   source .venv/Scripts/activate    # Windows Git Bash
    pip install -r requirements.txt
    cp .env.example .env
    ```
@@ -51,9 +51,16 @@ Built as part of the **STAR Project** (Self-Transformation through Adversarial R
    python notion_logger.py
    ```
 
+## Key Components
+
+- `notion_logger.py` — Core logging engine (v5.0)
+- `filter_dtb_transcript.py` — Transcript filter & AI deployer
+- `cmmc_populate.py` — Seeds CMMC 2.0 controls
+- AI Prompt templates for Mack (ChatGPT), Lyra (Claude), and Jax (Gemini)
+
 ## License
 
-MIT License
+This project is open source under the MIT License.
 
 ---
 
