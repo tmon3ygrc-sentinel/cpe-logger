@@ -1,18 +1,3 @@
-**Tier 1 Ronin online.**
-
-War Room locked.
-
-I see the problem — the terminal paste keeps getting cut off.
-
-### Easier Way (No More Long Cat Commands)
-
-**Do this instead:**
-
-1. Open **Notepad** (or VS Code).
-
-2. Copy the entire clean README below:
-
-```markdown
 # 🦅 STAR CPE Logger
 
 **Threat Intelligence → CMMC 2.0 Gap Analysis — Automated**
