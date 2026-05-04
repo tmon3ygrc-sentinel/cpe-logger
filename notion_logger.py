@@ -89,6 +89,7 @@ SKIP = {
     "date_watched",
     "cpe_credits",
     "cmmc_mapping",
+    "learning_phase",
 }
 
 # ─── UTILITIES ────────────────────────────────────────────────────────────────
@@ -209,7 +210,7 @@ def push_record(record: dict, source_label: str, url: str) -> bool:
         "date_watched": {"date": {"start": date.today().isoformat()}},
         "cpe_credits":  {"number": 0.75 if "Simply" in source_label else 0.5},
         "record_id":    {"rich_text": to_text(record_id)},
-        "cpe_category": {"select": to_select(record.get("cpe_category", "Technical"))},
+        "cpe_category": {"multi_select": to_multi(record.get("cpe_category", "Technical"))},
         "content_type": {"multi_select": to_multi(record.get("content_type", "Video"))},
     }
 
@@ -277,6 +278,8 @@ def push_record(record: dict, source_label: str, url: str) -> bool:
     except Exception as e:
         print(f"❌ Failed: {record_id} | {e}")
         return False
+
+
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 
