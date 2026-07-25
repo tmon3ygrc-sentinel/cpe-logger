@@ -325,6 +325,7 @@ impacted_identity_provider::
 - **Master Frameworks(CMMC 2.0 / NIST 800-171)**: CMMC 2.0 Control IDs in exact format XX.L#-#.##.# (e.g., AC.L1-3.1.1, SI.L2-3.14.1, IR.L2-3.6.1). Comma-separated. Use "None" if no clear mapping.
   CRITICAL EXCEPTIONS — these are frequent errors:
   - IA 3.5.1 and 3.5.2: these originate from FAR 52.204-21 and are Level 1 practices in the DoD CMMC model. ALWAYS write IA.L1-3.5.1 and IA.L1-3.5.2. NEVER write IA.L2-3.5.1 or IA.L2-3.5.2 — those IDs do not exist in the official CMMC model.
+  - SI 3.14.2: corrected to Level 1 per Master Frameworks DB Defect D (2026-07-02) — the SI family has no Level 2 requirement at this ref. ALWAYS write SI.L1-3.14.2. NEVER write SI.L2-3.14.2.
   - SR controls: valid requirement ranges are 3.15.x and 3.24.x ONLY (e.g., SR.L2-3.15.1, SR.L2-3.24.1). SR.L2-3.17.x does not exist — do NOT output any SR.3.17.x ID. Use "None" if no valid SR control applies.
 - **GRC_Learning_Plan_All_Phases**: Map to the most relevant week: "Week ## - [title]". Options: Week 25 - Developing security policies, Week 26 - Building compliance programs, Week 27 - Risk management frameworks. Leave blank if no match.
 - **identity_impact**: Who is impacted (comma-separated). Values: workforce-accounts, administrative-roles, system-administrators, security-operations, service-accounts, non-human-identities, executive-accounts, third-party-vendors, none, unknown.
@@ -790,8 +791,17 @@ def get_audio_transcript(enclosure_url: str) -> str:
             "❌ Audio path requires CUDA — CPU fallback exceeds scheduler "
             "timeout. Aborting."
         )
-    from faster_whisper import WhisperModel
+    from faster_whisper import WhisperModel, decode_audio
     import tempfile
+
+    SAMPLE_RATE = 16000
+    CHUNK_SECONDS = 900  # 15 min — bounds peak STFT array to ~0.29 GiB
+                         # regardless of total episode length (see
+                         # architect_audio_ingest_memory_pressure_ticket.md);
+                         # the old unchunked call built a 1.63 GiB array
+                         # for a 91-min episode with zero cap.
+    CHUNK_SAMPLES = CHUNK_SECONDS * SAMPLE_RATE
+
     with tempfile.TemporaryDirectory() as tmpdir:
         audio_path = Path(tmpdir) / "episode.mp3"
         resp = requests.get(enclosure_url, stream=True, timeout=60)
@@ -801,10 +811,27 @@ def get_audio_transcript(enclosure_url: str) -> str:
         with open(audio_path, "wb") as f:
             for chunk in resp.iter_content(chunk_size=1024 * 1024):
                 f.write(chunk)
+
         print("🎙️ Transcribing with faster-whisper (large-v2, CUDA)...")
         model = WhisperModel("large-v2", device="cuda", compute_type="float16")
-        segments, _info = model.transcribe(str(audio_path))
-        raw_text = " ".join(segment.text for segment in segments)
+
+        # Decode once (mono float32 @16kHz); this array itself is cheap —
+        # the STFT array built FROM it per model.transcribe() call was the
+        # actual uncapped memory hazard, now bounded by chunking below.
+        waveform = decode_audio(str(audio_path), sampling_rate=SAMPLE_RATE)
+        total_samples = waveform.shape[0]
+        num_chunks = -(-total_samples // CHUNK_SAMPLES)  # ceil div
+
+        raw_text_parts = []
+        for i in range(num_chunks):
+            start = i * CHUNK_SAMPLES
+            chunk_waveform = waveform[start:start + CHUNK_SAMPLES]
+            print(f"  chunk {i + 1}/{num_chunks} ({chunk_waveform.shape[0] / SAMPLE_RATE:.0f}s)...")
+            segments, _info = model.transcribe(chunk_waveform)
+            raw_text_parts.append(" ".join(segment.text for segment in segments))
+
+        raw_text = " ".join(raw_text_parts)
+
     clean_text = scrub(raw_text)
     print(f"✅ Transcript ready: {len(clean_text.split()):,} words")
     return clean_text
