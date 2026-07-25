@@ -33,6 +33,7 @@ Set-Location $ScriptDir
 # $OutputEncoding controls how PS decodes external process stdout/stderr;
 # without it PS uses the system codepage and garbles emoji before Out-File
 # ever sees the bytes.
+$env:PYTHONUNBUFFERED           = "1"
 $env:PYTHONIOENCODING          = "utf-8"
 $OutputEncoding                = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding      = [System.Text.Encoding]::UTF8
