@@ -546,9 +546,41 @@ def _extract_episode_number(title: str) -> int | None:
     """Pulls the real episode number out of an RSS entry's title text
     (e.g. 'Top Cyber News NOW – Ep 1172 – ...'). Returns None if the title
     doesn't carry a recognizable 'Ep NNN' token — callers must treat that
-    as 'no real episode number available', not guess one."""
+    as 'no real episode number available', not guess one.
+    Fallback only — see _resolve_episode_number(), which prefers the feed's
+    own <itunes:episode>/<podcast:episode> tag over this title-text scrape."""
     m = re.search(r'Ep\.?\s*(\d{3,5})', title, re.IGNORECASE)
     return int(m.group(1)) if m else None
+
+
+def _resolve_episode_number(entry, title: str) -> int | None:
+    """Determines the real episode number for an RSS entry. Prefers the
+    <itunes:episode> tag (feedparser exposes it as entry['itunes_episode'];
+    <podcast:episode> carries the identical value on this feed and has no
+    separate feedparser key) over _extract_episode_number()'s title-text
+    regex — the title is hand-written by the show and can lag the real
+    number. Confirmed live 2026-08-04: two consecutive days (08-03, 08-04)
+    had a stale 'Ep NNN' in the title while <itunes:episode> had already
+    incremented correctly, silently mis-numbering both days' records until
+    caught by a manual audit. Falls back to the title regex only when the
+    tag is absent or isn't a plain 3-5 digit number, so feeds/entries
+    without itunes:episode still resolve exactly as before this fix.
+    Logs a loud mismatch warning when title and tag disagree, so a future
+    lag is visible in the run log instead of requiring another audit."""
+    title_guess = _extract_episode_number(title)
+    tag_val = entry.get("itunes_episode") if hasattr(entry, "get") else None
+    if tag_val:
+        tag_str = str(tag_val).strip()
+        if re.fullmatch(r'\d{3,5}', tag_str):
+            tag_num = int(tag_str)
+            if title_guess and title_guess != tag_num:
+                print(f"⚠️  Episode number mismatch: title text says 'Ep {title_guess}' "
+                      f"but <itunes:episode> says {tag_num} — trusting the tag (title "
+                      f"text is hand-written and known to lag).")
+            return tag_num
+        print(f"⚠️  <itunes:episode> present but not a plain 3-5 digit number "
+              f"({tag_val!r}) — falling back to title text.")
+    return title_guess
 
 
 def get_rss_episode_date() -> tuple[str, str | None, str | None, int | None]:
@@ -565,7 +597,7 @@ def get_rss_episode_date() -> tuple[str, str | None, str | None, int | None]:
     if not parsed:
         raise RuntimeError("❌ No pubDate found in latest feed entry.")
     date_str = f"{parsed.tm_year:04d}-{parsed.tm_mon:02d}-{parsed.tm_mday:02d}"
-    ep_number = _extract_episode_number(title)
+    ep_number = _resolve_episode_number(latest, title)
     youtube_url = None
     yt_id = latest.get("yt_videoid")
     if yt_id:

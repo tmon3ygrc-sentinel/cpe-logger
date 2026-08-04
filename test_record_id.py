@@ -75,6 +75,32 @@ check("ep number, no match",
       nl._extract_episode_number("Some Random Episode Title"), None)
 
 # ===================================================================
+# 1b. _resolve_episode_number() — prefers <itunes:episode> over title
+#     text, per the 2026-08-04 incident (title lagged the real number
+#     two days running while itunes:episode was already correct).
+# ===================================================================
+check("tag present, agrees with title -> tag wins (trivially correct)",
+      nl._resolve_episode_number({"itunes_episode": "1186"},
+                                  "Jul 31's Top Cyber News NOW! - Ep 1186"),
+      1186)
+check("tag present, DISAGREES with title -> tag wins, not title "
+      "(the actual 08-03/08-04 shape)",
+      nl._resolve_episode_number({"itunes_episode": "1187"},
+                                  "Aug 3's Top Cyber News NOW! - Ep 1186"),
+      1187)
+check("tag absent -> falls back to title regex, old behavior unchanged",
+      nl._resolve_episode_number({},
+                                  "Top Cyber News NOW – Ep 1172 – Foo"),
+      1172)
+check("tag present but non-numeric garbage -> falls back to title regex",
+      nl._resolve_episode_number({"itunes_episode": "N/A"},
+                                  "Top Cyber News NOW – Ep 1172 – Foo"),
+      1172)
+check("tag absent AND no title match -> None, same as bare title regex",
+      nl._resolve_episode_number({}, "Some Random Episode Title"),
+      None)
+
+# ===================================================================
 # 2. Deterministic construction — the three format cases
 # ===================================================================
 nl.notion.databases.query = FakeQueryCounter(0)
