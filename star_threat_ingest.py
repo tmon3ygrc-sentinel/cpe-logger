@@ -65,19 +65,17 @@ Think like a seasoned vCISO: what are the durable, actionable strategic takeaway
 
 Return a JSON array of items. Each item must have exactly these fields:
 
-{
+{{
   "title": "Concise concept title (max 80 chars)",
   "pillars": ["Strategic Pillar 1", "Strategic Pillar 2"],
   "hot_take": "1-2 sentence vCISO-grade insight. Be direct and opinionated. Focus on the strategic implication, not just the description.",
-  "maturity": "One of: L1 - Initial/Ad-hoc | L2 - Documented/Defined | L3 - Repeatable/Managed | L4 - Adaptive/Proactive",
-  "horizon": "One of: Immediate | Mid-Term | Long-Term",
+  "maturity": "One of exactly: L1, L2, L3, L4 (short form only — L1=Initial/Ad-hoc, L2=Documented/Defined, L3=Repeatable/Managed, L4=Adaptive/Proactive)",
+  "horizon": "One of: Immediate | Short-term | Mid-Term | Long-Term",
   "cmmc": "Comma-separated CMMC 2.0 control IDs if applicable, e.g. AC.L2-3.1.1, IA.L2-3.5.3. Empty string if none."
-}
+}}
 
-Valid Strategic Pillars (use only these):
-Identity, Supply Chain, Resilience, Vulnerability Management, Incident Response,
-Threat Intelligence, Cloud Security, Endpoint Security, Governance & Compliance,
-Zero Trust, Automation, DFIR, Network Security, Mobile Security, Data Protection
+Valid Strategic Pillars (use only these — must match the live Notion field exactly):
+Resilience, Supply Chain, Identity, Automation, Mobile Security, Vulnerability Management
 
 Rules:
 - Extract 2-6 distinct strategic items per video. Quality over quantity.
@@ -215,7 +213,7 @@ def ingest(item: dict, url: str) -> bool:
         "Topic/Concept":  {"title": [{"text": {"content": title}}]},
         "Strategic Pillar": {"multi_select": to_multi(item.get("pillars", []))},
         "vCISO Hot Take": {"rich_text": [{"text": {"content": item.get("hot_take", "")[:2000]}}]},
-        "Maturity Target": {"select": {"name": item.get("maturity", "L3 - Repeatable/Managed")}},
+        "Maturity Target": {"select": {"name": item.get("maturity", "L3")}},
         "Horizon":        {"select": {"name": item.get("horizon", "Immediate")}},
         "Ingest Hash":    {"rich_text": [{"text": {"content": fingerprint}}]},
         "Operator":       {"rich_text": [{"text": {"content": OPERATOR_ID}}]},
