@@ -8,7 +8,9 @@ import os
 import re
 import json
 import hashlib
+import time
 import datetime
+from typing import Dict
 from dotenv import load_dotenv
 from notion_client import Client
 import anthropic
@@ -22,12 +24,20 @@ STAR_DB_ID       = os.getenv("STAR_DS_ID") or os.getenv("NOTION_DATABASE_ID")
 CMMC_DB_ID       = os.getenv("CMMC_DATABASE_ID", "32a55ed7403880b396e0de9386a76ff7")
 ANTHROPIC_KEY    = os.getenv("ANTHROPIC_API_KEY")
 OPERATOR_ID      = os.getenv("OPERATOR") or os.getenv("USERNAME") or "darke"
-
 if not NOTION_TOKEN:
     raise ValueError("❌ NOTION_TOKEN missing from .env")
 
 notion    = Client(auth=NOTION_TOKEN)
 CMMC_CACHE = {}
+STAR_DB_ID_PREFIX_CACHE: Dict[str, int] = {}
+
+
+class DedupCheckError(RuntimeError):
+    """Raised when the STAR DB dedup query cannot be completed after
+    retries. Callers must fail CLOSED — treat as unresolved, not as
+    'not a duplicate' — never assume absence on a query we couldn't
+    actually run."""
+    pass
 
 # ─── TRANSCRIPT ───────────────────────────────────────────────────────────────
 
@@ -36,8 +46,8 @@ def get_transcript(url: str) -> str:
     from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
     video_id = extract_video_id(url)
     try:
-        segments = YouTubeTranscriptApi.get_transcript(video_id)
-        return " ".join(s["text"] for s in segments)
+        segments = YouTubeTranscriptApi().fetch(video_id)
+        return " ".join(s.text for s in segments)
     except NoTranscriptFound:
         raise ValueError(f"❌ No transcript found for video: {video_id}")
     except TranscriptsDisabled:
@@ -127,33 +137,40 @@ def analyze_with_claude(transcript: str, url: str) -> list:
 
 # ─── CMMC CACHE ───────────────────────────────────────────────────────────────
 
-def load_cmmc_cache():
-    """Load CMMC control IDs into memory for relation lookups."""
-    print(f"📡 Querying Master Frameworks: {CMMC_DB_ID[:8]}...")
-    try:
-        has_more = True
-        cursor   = None
-        while has_more:
-            params = {"page_size": 100}
-            if cursor:
-                params["start_cursor"] = cursor
-            res = notion.data_sources.query(CMMC_DB_ID.strip(), **params)
-            for page in res.get("results", []):
-                props      = page.get("properties", {})
-                title_list = props.get("Name", {}).get("title", [])
-                if title_list:
-                    control_id = title_list[0].get("plain_text", "").strip()
-                    if control_id:
-                        CMMC_CACHE[control_id] = page["id"]
-            has_more = res.get("has_more", False)
-            cursor   = res.get("next_cursor")
+def load_cmmc_cache(retries: int = 3, delay: int = 15):
+    """Load CMMC control IDs into memory for relation lookups.
+    Retries up to `retries` times on transient failures before giving up."""
+    for attempt in range(1, retries + 1):
+        print(f"📡 Querying Master Frameworks (attempt {attempt}/{retries}): {CMMC_DB_ID[:8]}...")
+        try:
+            has_more = True
+            cursor   = None
+            while has_more:
+                params = {"database_id": CMMC_DB_ID.strip(), "page_size": 100}
+                if cursor:
+                    params["start_cursor"] = cursor
+                res = notion.databases.query(**params)
+                for page in res.get("results", []):
+                    props      = page.get("properties", {})
+                    title_list = props.get("Name", {}).get("title", [])
+                    if title_list:
+                        control_id = title_list[0].get("plain_text", "").strip()
+                        if control_id:
+                            CMMC_CACHE[control_id] = page["id"]
+                has_more = res.get("has_more", False)
+                cursor   = res.get("next_cursor")
 
-        if not CMMC_CACHE:
-            print("⚠️  Cache empty — no 'Name' rows found in Master Frameworks.")
-        else:
-            print(f"✅ CMMC cache loaded: {len(CMMC_CACHE)} controls")
-    except Exception as e:
-        print(f"❌ CMMC cache failed: {e}")
+            if not CMMC_CACHE:
+                print("⚠️  Cache empty — no 'Name' rows found in Master Frameworks.")
+            else:
+                print(f"✅ CMMC cache loaded: {len(CMMC_CACHE)} controls")
+            return
+        except Exception as e:
+            if attempt < retries:
+                print(f"⏳ CMMC cache error (attempt {attempt}/{retries}) — retrying in {delay}s: {e}")
+                time.sleep(delay)
+            else:
+                print(f"❌ CMMC cache failed after {retries} attempts: {e}")
 
 def resolve_cmmc(cmmc_raw: str) -> list:
     """Resolve CMMC control ID strings to Notion page relation objects."""
@@ -175,16 +192,59 @@ def generate_fingerprint(item: dict) -> str:
 
 # ─── DE-DUPLICATION ───────────────────────────────────────────────────────────
 
-def is_duplicate(title: str) -> bool:
-    """Check if topic already exists in STAR DB by title match."""
-    try:
-        res = notion.data_sources.query(
-            STAR_DB_ID,
-            filter={"property": "Topic/Concept", "title": {"equals": title}}
-)
-        return len(res.get("results", [])) > 0
-    except Exception:
-        return False
+def count_existing_star_ids_with_prefix(prefix: str, max_retries: int = 3, delay: float = 2.0) -> int:
+    """Counts live STAR DB rows whose STAR ID starts with prefix. Fails
+    CLOSED — raises DedupCheckError after retries rather than assuming 0
+    (assuming 0 on a failed query would let the sequence restart and
+    collide with real existing records)."""
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            res = notion.databases.query(
+                database_id=STAR_DB_ID,
+                filter={"property": "STAR ID", "rich_text": {"starts_with": prefix}}
+            )
+            return len(res.get("results", []))
+        except Exception as e:
+            last_exc = e
+            if attempt < max_retries:
+                print(f"⚠️  Prefix count query failed (attempt {attempt}/{max_retries}): {e} — retrying in {delay}s")
+                time.sleep(delay)
+    raise DedupCheckError(f"Prefix count query failed after {max_retries} attempts: {last_exc}")
+
+
+def construct_star_id(real_date: str | None = None) -> str:
+    """Deterministically builds STAR ID: barricadecyber-{date}-{seq:02d}.
+    Falls back to today's run date when no real published date is
+    available (get_transcript() doesn't currently carry one — same
+    fallback v7 uses for its manual-ingest path)."""
+    date_part = real_date or datetime.date.today().isoformat()
+    prefix = f"barricadecyber-{date_part}"
+    if prefix not in STAR_DB_ID_PREFIX_CACHE:
+        STAR_DB_ID_PREFIX_CACHE[prefix] = count_existing_star_ids_with_prefix(prefix) + 1
+    seq = STAR_DB_ID_PREFIX_CACHE[prefix]
+    STAR_DB_ID_PREFIX_CACHE[prefix] = seq + 1
+    return f"{prefix}-{seq:02d}"
+
+
+def is_duplicate(star_id: str, max_retries: int = 3, delay: float = 2.0) -> bool:
+    """Check if this STAR ID already exists in STAR DB. Fails CLOSED on
+    real query failures: raises DedupCheckError after retries exhausted
+    rather than silently returning False."""
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            res = notion.databases.query(
+                database_id=STAR_DB_ID,
+                filter={"property": "STAR ID", "rich_text": {"equals": star_id}}
+            )
+            return len(res.get("results", [])) > 0
+        except Exception as e:
+            last_exc = e
+            if attempt < max_retries:
+                print(f"⚠️  Dedup query failed (attempt {attempt}/{max_retries}): {e} — retrying in {delay}s")
+                time.sleep(delay)
+    raise DedupCheckError(f"Dedup query failed after {max_retries} attempts: {last_exc}")
 
 # ─── UTILITIES ────────────────────────────────────────────────────────────────
 
@@ -201,9 +261,15 @@ def to_multi(values) -> list:
 def ingest(item: dict, url: str) -> bool:
     """Push a single STAR item to Notion with audit trail."""
     title = item.get("title", "Untitled")
+    star_id = construct_star_id(item.get("_real_date"))  # _real_date optional, not currently populated by any caller
 
-    if is_duplicate(title):
-        print(f"⏭️  Skipping duplicate: {title}")
+    try:
+        if is_duplicate(star_id):
+            print(f"⏭️  Skipping duplicate: {star_id} ({title})")
+            return False
+    except DedupCheckError as e:
+        print(f"❌ DEDUP-CHECK-FAILED: {star_id} ({title}) | {e}")
+        print(f"   Not pushed — dedup status unknown, not assumed new. Re-run to retry.")
         return False
 
     item["url"] = item.get("url") or url
@@ -217,6 +283,7 @@ def ingest(item: dict, url: str) -> bool:
         "Horizon":        {"select": {"name": item.get("horizon", "Immediate")}},
         "Ingest Hash":    {"rich_text": [{"text": {"content": fingerprint}}]},
         "Operator":       {"rich_text": [{"text": {"content": OPERATOR_ID}}]},
+        "STAR ID":        {"rich_text": [{"text": {"content": star_id}}]},
     }
 
     if item.get("url"):
@@ -232,7 +299,7 @@ def ingest(item: dict, url: str) -> bool:
             parent={"database_id": STAR_DB_ID},
             properties=properties
         )
-        print(f"✅ Ingested: {title} [HASH: {fingerprint[:8]}...]")
+        print(f"✅ Ingested: {title} [HASH: {fingerprint[:8]}...] [STAR ID: {star_id}]")
         return True
     except Exception as e:
         print(f"❌ Failed: {title} | {e}")

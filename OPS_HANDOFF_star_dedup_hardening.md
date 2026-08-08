@@ -27,14 +27,17 @@ independently testable inside the one change.
 
 ---
 
-## Open decision — confirm before writing to Notion
+## Schema decision — RESOLVED 2026-08-08
 
-This spec assumes a new property **`STAR ID`** (type: rich_text) gets added
-to the live STAR database. **This is a schema change to a production Notion
-DB — AO's call, not OPS's to default on.** Confirm the field name and type
-with AO before running any `notion.databases.update` / adding the property
-via the Notion UI. If AO wants a different name or a different mechanism
-entirely, stop and get the corrected spec rather than improvising.
+AO confirmed: **`STAR ID`**, type rich_text, added to the live
+`STAR_STRATEGY_DB_V2` (`collection://33a55ed7-4038-802b-9f10-000b98509194`).
+Executed via `notion-update-data-source` (`ADD COLUMN "STAR ID" RICH_TEXT`),
+verified live via a post-write schema re-fetch — `"STAR ID":{"type":"text"}`
+confirmed present, not just taken on the write call's own success response.
+No naming/type deviation from this spec's original assumption. Piece 2 is
+now unblocked — the field Piece 2's code needs to write to and dedup-check
+against exists live. Code itself (Piece 1 + Piece 2 as specced below) is
+still unbuilt; this only closes the schema prerequisite.
 
 ---
 
