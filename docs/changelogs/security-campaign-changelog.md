@@ -1,5 +1,9 @@
 # Security Campaign — Changelog
 
+## 2026-08-13
+
+- Added Architecture section — DARKSWORD pipeline map (Mermaid + PNG fallback).
+
 ## 2026-08-08
 
 - **Docs folder structure created.** `docs/security-campaign/`, `docs/persona-workflow/`, `docs/cold-starts/`, `docs/changelogs/` established per the original Git/VSCode Documentation Plan (open since 2026-07-16). Backfilled with the full pilot-lesson history to date.

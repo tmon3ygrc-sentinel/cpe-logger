@@ -1,10 +1,9 @@
 # ⚔️ Project DARKSWORD — GRC Intelligence Platform
+### Threat Intelligence → CMMC 2.0 Gap Analysis — Automated
 
-**Threat Intelligence → CMMC 2.0 Gap Analysis — Automated**
+A multi-source intelligence pipeline that ingests daily security content from podcast feeds, threat feeds, and YouTube, classifies it using Claude AI, maps it against CMMC 2.0 / NIST 800-171 controls, links records to a live GRC learning plan, and pushes structured records into a Notion GRC repository.
 
-A multi-source intelligence pipeline that ingests daily security content from show notes, threat feeds, and YouTube, classifies it using Claude AI, maps it against **CMMC 2.0 / NIST 800-171** controls, links records to a live GRC learning plan, and pushes structured records into a Notion GRC repository.
-
-Built as part of the **STAR Project** (Self-Transformation through Adversarial Rigor) — a hands-on vCISO development program. Manual mastery first, automation second.
+Built as part of the STAR Project (Self-Transformation through Adversarial Rigor) — a hands-on vCISO development program. Manual mastery first, automation second.
 
 ---
 
@@ -16,7 +15,7 @@ Nation-state actors and ransomware operators are already leveraging AI to scale 
 
 DARKSWORD exists to close that gap.
 
-A solo GRC analyst with a spreadsheet isn't a fair fight against an AI-augmented adversary. But a GRC analyst running an autonomous intelligence pipeline that ingests multiple threat feeds daily, maps every story to CMMC 2.0 controls, maintains a living audit trail, and surfaces critical threat intensity across 131 controls — that's a different posture entirely.
+A solo GRC analyst with a spreadsheet isn't a fair fight against an AI-augmented adversary. But a GRC analyst running an autonomous intelligence pipeline that ingests multiple threat feeds daily, maps every story to CMMC 2.0 controls, maintains a living audit trail, and surfaces critical threat intensity across 146 controls — that's a different posture entirely.
 
 This project is proof that defenders can use the same technology to build leverage. Not to replace analyst judgment — but to amplify it.
 
@@ -26,34 +25,108 @@ The threat actors aren't waiting. Neither should you.
 
 ## Architecture
 
-```
-Simply Cyber (show notes / YouTube)     AlienVault OTX (feed)     Barricade Cyber (YouTube)
-              ↓                                   ↓                         ↓
-  get_show_notes() [primary]            get_otx_pulses()          get_barricade_latest() [RSS]
-  get_barricade_intel() [<500w fallback]         ↓                get_barricade_intel() [transcript]
-              ↓                    analyze_with_claude_prompt()             ↓
-  analyze_with_claude()              (OTX_ANALYST_PROMPT)        analyze_with_claude()
-              ↓                                   ↓                         ↓
-              └───────────────────────────────────┘─────────────────────────┘
-                                          ↓
-                               governance_input.txt
-                                          ↓
-                               notion_logger_v7.py
-                                [DARKSWORD Engine]
-                                          ↓
-                                   CPE Tracker DB
-                                    ↙         ↘
-                    Master Frameworks DB     GRC Learning Plan DB
-                      (CMMC 2.0)              [Auto-linked by content]
+DARKSWORD runs two independent ingestion chains. Both terminate in Notion databases that
+serve as the durable system of record for CPE, framework mapping, and adversary tracking.
+
+```mermaid
+flowchart TD
+
+%% ---------- 01 GOVERNANCE & CPE CHAIN ----------
+subgraph P1["01 · Governance &amp; CPE Chain"]
+  direction TB
+  SC["Simply Cyber<br/>show notes · YouTube"]
+  OTX["AlienVault OTX<br/>threat pulse feed"]
+
+  SN["get_show_notes()<br/>PRIMARY"]
+  BI["get_barricade_intel()<br/>FALLBACK · under 500 words"]
+  OP["get_otx_pulses()"]
+
+  AC["analyze_with_claude()"]
+  ACP["analyze_with_claude_prompt()<br/>OTX_ANALYST_PROMPT"]
+
+  GI["governance_input.txt"]
+  ENG["notion_logger_v7.py<br/>DARKSWORD Engine"]
+
+  CPE[("CPE Tracker DB")]
+  MF[("Master Frameworks DB<br/>CMMC 2.0 — 146 controls")]
+  GRC[("GRC Learning Plan DB<br/>auto-linked by content")]
+
+  SC --> SN
+  SC -.->|thin show notes| BI
+  SN --> AC
+  BI --> AC
+  OTX --> OP --> ACP
+  AC --> GI
+  ACP --> GI
+  GI --> ENG --> CPE
+  CPE --> MF
+  CPE --> GRC
+end
+
+%% ---------- 02 NARRATIVE & ACTOR INTEL CHAIN ----------
+subgraph P2["02 · Narrative &amp; Actor Intel Chain"]
+  direction TB
+  DD["Darknet Diaries<br/>RSS · VTT"]
+  CSA["CrowdStrike Adversary Universe<br/>Whisper · on disk"]
+
+  DDT["fetch RSS → VTT transcript"]
+  CST["Whisper .txt transcripts<br/>pre-generated"]
+
+  EX["Claude extraction<br/>STAR fields + actor identification"]
+
+  STAR[("STAR_STRATEGY_DB_V2<br/>tactical / strategic GRC")]
+  TAR[("Threat Actor Registry<br/>actor stubs, auto-created")]
+
+  DD --> DDT --> EX
+  CSA --> CST --> EX
+  EX --> STAR
+  EX --> TAR
+end
+
+%% ---------- STYLING ----------
+classDef source fill:#E5F2FC,stroke:#2783DE,color:#14304d;
+classDef step fill:#F9F8F7,stroke:#C9C7C3,color:#2C2C2B;
+classDef engine fill:#E8ECFB,stroke:#5E6FD6,color:#1d2450,font-weight:bold;
+classDef db fill:#E8F1EC,stroke:#46A171,color:#153524;
+classDef fallback fill:#FBEBDE,stroke:#D5803B,color:#4a2c11;
+
+class SC,OTX,DD,CSA source;
+class SN,OP,AC,ACP,GI,DDT,CST step;
+class BI fallback;
+class ENG,EX engine;
+class CPE,MF,GRC,STAR,TAR db;
 ```
 
-### Databases (Notion)
+### Pipeline notes
+
+| Stage | Governance &amp; CPE Chain | Narrative &amp; Actor Intel Chain |
+| --- | --- | --- |
+| Sources | Simply Cyber show notes, AlienVault OTX pulses | Darknet Diaries RSS, CrowdStrike Adversary Universe |
+| Collection | `get_show_notes()` with `get_barricade_intel()` fallback when show notes run under 500 words; `get_otx_pulses()` | RSS to VTT transcript fetch; pre-generated Whisper `.txt` transcripts |
+| Analysis | `analyze_with_claude()` and `analyze_with_claude_prompt()` using `OTX_ANALYST_PROMPT` | Single Claude extraction pass for STAR fields and actor identification |
+| Handoff | `governance_input.txt` | in-memory, no intermediate file |
+| Engine | `notion_logger_v7.py` (DARKSWORD Engine) | Claude extraction writes directly |
+| Destinations | CPE Tracker DB, then Master Frameworks DB (CMMC 2.0 — 146 controls) and GRC Learning Plan DB | STAR_STRATEGY_DB_V2 and Threat Actor Registry |
+
+<details>
+<summary>Static diagram (rendered infographic)</summary>
+
+![DARKSWORD pipeline architecture](docs/assets/darksword-pipeline.png)
+
+Interactive version: [`darksword-pipeline.html`](docs/assets/darksword-pipeline.html)
+
+</details>
+
+---
+
+## Databases (Notion)
 
 | Database | Script | Source | Purpose |
 |---|---|---|---|
-| CPE Tracker | `notion_logger_v7.py` | Simply Cyber, AlienVault OTX, Barricade Cyber | Tactical threat intel |
-| STAR Strategy | `threat_ingest.py` | Barricade Cyber (legacy engine) | Strategic architecture |
-| Master Frameworks | shared | CMMC 2.0 | Control mapping (source of truth) |
+| CPE Tracker | `notion_logger_v7.py` | Simply Cyber, AlienVault OTX | Tactical threat intel, CMMC mapping |
+| STAR Strategy DB V2 | `darknetdiaries_ingest.py`, `crowdstrike_ingest.py` | Darknet Diaries, CrowdStrike Adversary Universe | Strategic GRC intel, actor-linked |
+| Threat Actor Registry | `darknetdiaries_ingest.py`, `crowdstrike_ingest.py` | Auto-created from ingest | Actor stubs with classification and aliases |
+| Master Frameworks | shared | CMMC 2.0 / NIST 800-171 (146 controls) | Control mapping source of truth |
 | GRC Learning Plan | shared | Internal | Auto-linked from control domains |
 
 ---
@@ -61,72 +134,94 @@ Simply Cyber (show notes / YouTube)     AlienVault OTX (feed)     Barricade Cybe
 ## Workspace Structure
 
 ```
-STAR_PROJECT (GRC-OCEG)
-└── darksword/
-    ├── notion_logger_v7.py           ← DARKSWORD core engine (V7)
-    ├── threat_ingest.py              ← Barricade engine (legacy)
-    ├── run_darksword_auto.ps1        ← Task Scheduler: Simply Cyber daily
-    ├── run_darksword_otx.ps1         ← Task Scheduler: AlienVault OTX
-    ├── run_darksword_barricade.ps1   ← Task Scheduler: Barricade Cyber
-    ├── gemini_ingest_tool.py         ← Standalone Gemini YouTube transcription tool
-    ├── governance_input.txt          ← Working file (gitignored)
-    ├── barricade_last_ingested.txt   ← Barricade dedup state (gitignored)
-    ├── failed_records.txt            ← Failed push log
-    ├── prompts/                      ← Analyst prompt library
-    ├── archive/                      ← Legacy scripts
-    ├── GRC-Playground/               ← Experimental work
-    ├── GovSCH/                       ← Governance scheduler
-    ├── .env                          ← API keys (gitignored)
-    ├── requirements.txt
-    ├── README.md
-    └── script_walkthrough_.md        ← Full code walkthrough
+C:\Work\GRC\darksword\
+├── notion_logger_v7.py              ← DARKSWORD core engine (CPE Tracker pipeline)
+├── star_threat_ingest.py            ← STAR Strategy pipeline (Barricade legacy + STAR fields)
+├── darknetdiaries_ingest.py         ← Darknet Diaries → STAR + Threat Actor Registry
+├── crowdstrike_ingest.py            ← CrowdStrike Adversary Universe → STAR + Registry
+├── gemini_ingest_tool.py            ← Standalone Gemini YouTube transcription tool
+├── run_darksword_auto.ps1           ← Task Scheduler: Simply Cyber daily
+├── run_darksword_otx.ps1            ← Task Scheduler: AlienVault OTX
+├── run_darksword_barricade.ps1      ← Task Scheduler: Barricade Cyber
+├── data/
+│   └── crowdstrike_transcripts/     ← Whisper .txt transcripts (7 adversary episodes)
+├── docs/
+│   ├── handovers/                   ← Session handover docs
+│   ├── cold-starts/                 ← Cold-start pilot lessons
+│   ├── persona-workflow/            ← AO persona model, approval gates
+│   ├── security-campaign/           ← Security campaign docs
+│   └── changelogs/                  ← Project changelogs
+├── prompts/                         ← Analyst prompt library
+├── archive/                         ← Legacy scripts
+├── GRC-Playground/                  ← Experimental work
+├── .env                             ← API keys (gitignored)
+├── governance_input.txt             ← Working file (gitignored)
+├── barricade_last_ingested.txt      ← Barricade dedup state (gitignored)
+├── failed_records.txt               ← Failed push log
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
 ## Pipeline Modes
 
-### DARKSWORD (`notion_logger_v7.py`)
+### DARKSWORD (`notion_logger_v7.py`) — CPE Tracker Pipeline
 
-```bash
+```
 cpe   # launches via alias
 ```
 
-#### Interactive menu
-
 | Choice | Description | Source Label |
 |---|---|---|
-| `1. Autonomous Pipeline` | Show Notes → Claude → Notion (prompts for date) | Simply Cyber Daily Threat Brief |
-| `2. Manual Pipeline` | `governance_input.txt` → Notion | *(user-specified)* |
-| `3. Test Pipeline` | Mock data → Notion (`$0.00`, `--test` flag only) | — |
-| `4. OTX Pipeline` | AlienVault OTX → Claude → Notion | AlienVault OTX |
-| `5. RSS Feed Pipeline` | RSS auto-detect date → Show Notes → Claude → Notion | Simply Cyber Daily Threat Brief |
-| `6. Barricade Cyber` | YouTube URL → Transcript → Claude → Notion | Barricade Cyber |
-| `7. Simply Cyber YouTube` | YouTube URL → Transcript → Claude → Notion | Simply Cyber Daily Threat Brief |
-| `8. Gemini YouTube Ingest` | YouTube URL → Gemini transcript → Claude → Notion | *(user-selected)* |
+| 1. Autonomous Pipeline | Show Notes → Claude → Notion (prompts for date) | Simply Cyber Daily Threat Brief |
+| 2. Manual Pipeline | `governance_input.txt` → Notion | (user-specified) |
+| 3. Test Pipeline | Mock data → Notion (`--test` flag only) | — |
+| 4. OTX Pipeline | AlienVault OTX → Claude → Notion | AlienVault OTX |
+| 5. RSS Feed Pipeline | RSS auto-detect date → Show Notes → Claude → Notion | Simply Cyber Daily Threat Brief |
+| 6. Barricade Cyber | YouTube URL → Transcript → Claude → Notion | Barricade Cyber |
+| 7. Simply Cyber YouTube | YouTube URL → Transcript → Claude → Notion | Simply Cyber Daily Threat Brief |
+| 8. Gemini YouTube Ingest | YouTube URL → Gemini transcript → Claude → Notion | (user-selected) |
 
-Choice 7 is the show notes fallback — same flow as Choice 6 but tagged as Simply Cyber. Use it when the show notes page hasn't published yet or has insufficient content.
+### Darknet Diaries Pipeline (`darknetdiaries_ingest.py`)
 
-Choice 8 uses the Gemini API (`gemini-2.0-flash`) to transcribe YouTube videos that `YouTubeTranscriptApi` cannot access — restricted, age-gated, or long-form content. Prompts for a canonical source label. Requires `GEMINI_API_KEY` in `.env`. `gemini_ingest_tool.py` is the equivalent standalone script.
+Fetches RSS, pulls VTT transcripts (173/179 episodes have transcripts), runs Claude extraction per episode, resolves threat actors against the Threat Actor Registry, and pushes to STAR_STRATEGY_DB_V2.
 
-#### Non-interactive flags (Task Scheduler)
+```bash
+python darknetdiaries_ingest.py --dry-run       # preview without writing
+python darknetdiaries_ingest.py                 # live run (incremental via Episode Number cursor)
+python darknetdiaries_ingest.py --limit N       # process N episodes only
+```
+
+### CrowdStrike Adversary Universe Pipeline (`crowdstrike_ingest.py`)
+
+Reads pre-generated Whisper transcripts from `data/crowdstrike_transcripts/`, runs Claude extraction, resolves actors against the Threat Actor Registry, and pushes to STAR_STRATEGY_DB_V2. Scoped to 7 adversary-profile episodes (ALL-CAPS actor name in title).
+
+```bash
+python crowdstrike_ingest.py --dry-run          # preview without writing
+python crowdstrike_ingest.py                    # live run
+```
+
+### Non-interactive flags (Task Scheduler)
 
 | Flag | Pipeline | Log file |
 |---|---|---|
 | `--auto` | RSS date detect → show notes → Claude → Notion (with <500-word YouTube fallback) | `darksword_YYYY-MM-DD.log` |
 | `--auto-otx` | AlienVault OTX → Claude → Notion | `darksword_otx_YYYY-MM-DD.log` |
-| `--auto-barricade` | Barricade RSS → transcript → Claude → Notion (with restricted-video fallback + dedup) | `darksword_barricade_YYYY-MM-DD.log` |
+| `--auto-barricade` | Barricade RSS → transcript → Claude → Notion | `darksword_barricade_YYYY-MM-DD.log` |
 
-Flags are mutually exclusive. `--test` is also mutually exclusive with all auto flags.
+---
 
-#### Word count gate (`--auto`)
+## Intelligence Sources
 
-After `get_show_notes()` returns, the script counts words. If the result is below 500:
-1. Prints a warning with the actual word count
-2. Extracts the YouTube URL from the same RSS entry
-3. Falls back to `get_barricade_intel()` to fetch the YouTube transcript
-4. Continues the Claude/Notion pipeline with the transcript as content
-5. If no YouTube URL was in the RSS entry, or the transcript fetch fails, exits cleanly (code 0)
+| Source | Channel | Focus | Status |
+|---|---|---|---|
+| Simply Cyber | Show Notes | Daily tactical threat briefs | ✅ Live (auto + interactive) |
+| AlienVault OTX | Threat Feed | IOC feeds, pulse intelligence | ✅ Live (auto + interactive) |
+| Barricade Cyber | YouTube | DFIR, MSP/enterprise ops | ✅ Live (auto + interactive) |
+| Darknet Diaries | RSS/VTT | Deep-dive threat actor narratives | ✅ Live — 168/179 episodes ingested |
+| CrowdStrike Adversary Universe | Whisper/disk | Adversary profiles (SPIDER, PANDA, CHOLLIMA taxonomy) | ✅ Live — 7 adversary episodes ingested |
+| Cybernews | YouTube | Threat actor profiles | ⏸ Parked — feed dormant since May 2025; 88-episode backfill queued |
 
 ---
 
@@ -143,45 +238,19 @@ cp .env.example .env
 
 Fill in `.env`:
 
-```env
+```
 # Core
 NOTION_TOKEN=secret_...
 DATABASE_ID=...                  # CPE Tracker
 CMMC_DATABASE_ID=...             # Master Frameworks
 ANTHROPIC_API_KEY=sk-ant-...
-OTX_API_KEY=...                  # AlienVault OTX (for Choice 4 / --auto-otx)
-GEMINI_API_KEY=...               # Gemini API (for Choice 8 / gemini_ingest_tool.py)
+OTX_API_KEY=...                  # AlienVault OTX
+GEMINI_API_KEY=...               # Gemini API (Choice 8)
 
 # Learning Plan Weeks
 LEARNING_WEEK_1=...
 LEARNING_WEEK_2=...
-LEARNING_WEEK_3=...
-LEARNING_WEEK_5=...
-LEARNING_WEEK_6=...
-LEARNING_WEEK_7=...
-LEARNING_WEEK_8=...
-LEARNING_WEEK_10=...
-LEARNING_WEEK_11=...
-LEARNING_WEEK_12=...
-LEARNING_WEEK_13=...
-LEARNING_WEEK_14=...
-LEARNING_WEEK_15=...
-LEARNING_WEEK_17=...
-LEARNING_WEEK_18=...
-LEARNING_WEEK_19=...
-LEARNING_WEEK_20=...
-LEARNING_WEEK_21=...
-LEARNING_WEEK_23=...
-LEARNING_WEEK_24=...
-LEARNING_WEEK_25=...
-LEARNING_WEEK_26=...
-LEARNING_WEEK_27=...
-LEARNING_WEEK_28=...
-LEARNING_WEEK_29=...
-LEARNING_WEEK_30=...
-LEARNING_WEEK_33=...
-LEARNING_WEEK_35=...
-LEARNING_WEEK_36=...
+...
 ```
 
 Set the `cpe` alias in `~/.bashrc`:
@@ -192,60 +261,34 @@ alias cpe='cd /c/Work/GRC/darksword && /c/Work/GRC/.venv/Scripts/python.exe noti
 
 ### Security: activate the pre-commit hook
 
-This repo ships a `gitleaks` pre-commit hook (`.githooks/pre-commit`) that scans staged changes and **blocks any commit containing a secret**. Git does not auto-run hooks from a clone (a deliberate remote-code-execution safeguard), so enable it once after cloning:
-
 ```bash
 git config core.hooksPath .githooks
 ```
 
-Requires the [`gitleaks`](https://github.com/gitleaks/gitleaks) binary on `PATH`. To confirm it's live, stage a fake secret and attempt a commit — the hook should reject it.
-
-### Key dependencies
-
-`notion-client` is pinned to `==2.2.1` in `requirements.txt`. The Notion SDK's async behavior changed in later versions in ways that break the synchronous pipeline. Do not upgrade without testing.
-
-`google-genai` is required for Choice 8 and `gemini_ingest_tool.py`. Install with `pip install google-genai`. Uses `gemini-2.0-flash` via `client.models.generate_content()` with `types.Part.from_uri()` for YouTube URL passing.
+Requires `gitleaks` on PATH. Scans staged changes and blocks commits containing secrets.
 
 ---
 
-## Intelligence Sources
+## Key Dependencies
 
-| Source | Channel | Focus | Status |
-|---|---|---|---|
-| Simply Cyber | Show Notes | Daily tactical threat briefs | ✅ Live (auto + interactive) |
-| AlienVault OTX | Threat Feed | IOC feeds, pulse intelligence | ✅ Live (auto + interactive) |
-| Barricade Cyber | YouTube | DFIR, MSP/enterprise ops | ✅ Live (auto + interactive) |
-| Cybernews | YouTube | Threat actor profiles, geopolitical | Planned |
-
----
-
-## Task Scheduler
-
-Three Windows Task Scheduler tasks run `notion_logger_v7.py` non-interactively on a daily schedule:
-
-| Task | Script | Trigger |
-|---|---|---|
-| DARKSWORD Auto | `run_darksword_auto.ps1` | Weekdays 9 AM |
-| DARKSWORD OTX | `run_darksword_otx.ps1` | Daily |
-| DARKSWORD Barricade | `run_darksword_barricade.ps1` | Daily |
-
-Each PS1 wrapper sets `PYTHONIOENCODING=utf-8` and `$OutputEncoding` to prevent emoji corruption in log files, then tees stdout+stderr to a dated log file.
+- `notion-client==2.2.1` — pinned. Later versions break the synchronous pipeline. Do not upgrade without testing.
+- `google-genai` — required for Choice 8 and `gemini_ingest_tool.py`. Uses `gemini-2.0-flash`.
+- `youtube-transcript-api` — used by `get_barricade_intel()` and the Simply Cyber YouTube fallback.
+- `openai-whisper` — used for CrowdStrike transcription (Colab, not local). Not in `requirements.txt` — install in Colab only.
 
 ---
 
 ## CMMC Cache
 
-The script queries the Master Frameworks database at launch and builds an in-memory cache of all CMMC 2.0 controls. Currently loaded: **128 controls**.
+The script queries the Master Frameworks database at launch and builds an in-memory cache of all CMMC 2.0 controls. Currently loaded: **146 controls** (128 base + 18 added via FORGE Track 1, 2026-08).
 
-`normalize_cid()` strips whitespace and normalizes case before cache lookups. Unresolved IDs are tracked in `CMMC_MISSES` and printed in a post-run miss report so gaps can be investigated without interrupting the push loop.
+`normalize_cid()` strips whitespace and normalizes case before cache lookups. Unresolved IDs are tracked in `CMMC_MISSES` and printed post-run.
 
 ---
 
 ## Learning Plan Auto-Mapping
 
-Every intel record is automatically linked to relevant GRC learning plan weeks based on its `control_domains` and `intel_category` — no manual input required.
-
-**Domain → Week mapping:**
+Every CPE Tracker record is automatically linked to relevant GRC learning plan weeks based on `control_domains` and `intel_category`.
 
 | Control Domain | Learning Weeks |
 |---|---|
@@ -260,21 +303,6 @@ Every intel record is automatically linked to relevant GRC learning plan weeks b
 | Security Awareness and Training (AT) | Week 5 |
 | Audit and Accountability (AU) | Week 27, Week 28 |
 
-**Category → Week mapping:**
-
-| Intel Category | Learning Weeks |
-|---|---|
-| regulatory | Week 25 |
-| advisory | Week 26 |
-| supply-chain | Week 19, Week 29 |
-| incident / ransomware / phishing | Week 23 |
-| vulnerability | Week 20, Week 21 |
-| malware | Week 19 |
-| breach | Week 28 |
-| law-enforcement | Week 25 |
-| ai-risk | Week 17 |
-| identity-intelligence | Week 13 |
-
 ---
 
 ## Roadmap
@@ -282,42 +310,36 @@ Every intel record is automatically linked to relevant GRC learning plan weeks b
 - [x] DARKSWORD v6 — Claude-powered tactical intel pipeline
 - [x] Manual Pipeline — standard workflow for Simply Cyber content
 - [x] CMMC relation mapping (128 controls)
-- [x] `SR.L2-3.15.2` added to Master Frameworks
-- [x] `impacted_identity_provider` field mapping fixed
-- [x] Learning plan auto-detection from `control_domains` and `intel_category`
-- [x] Learning plan expanded from 3 weeks to 29 weeks
-- [x] DARKSWORD v7 — `get_show_notes()` replaces YouTube scraping for Simply Cyber
-- [x] Autonomous Pipeline (Choice 1) live for Simply Cyber via show notes
-- [x] OTX Pipeline (Choice 4) — AlienVault threat feed integration with three-gate filter
-- [x] `analyze_with_claude_prompt()` — per-source prompt tuning
-- [x] `OTX_ANALYST_PROMPT` — `content_type`, `content_category`, `impacted_identity_provider` fixed
-- [x] CMMC cache retry loop (3 attempts, rate-limit resilient)
-- [x] `max_tokens` increased to 16000
-- [x] RSS Feed Pipeline (Choice 5) — auto-detects episode date from Transistor RSS
-- [x] `--auto` flag — non-interactive Simply Cyber pipeline for Task Scheduler
-- [x] `--auto-otx` flag — non-interactive OTX pipeline for Task Scheduler
-- [x] `--auto-barricade` flag — non-interactive Barricade pipeline for Task Scheduler
-- [x] Windows Task Scheduler automation (3 tasks, 3 PS1 wrappers)
-- [x] Barricade Cyber pipeline (Choice 6) — YouTube transcript via `YouTubeTranscriptApi`
-- [x] `get_barricade_latest()` — RSS-driven with restricted-video fallback and deduplication
-- [x] Simply Cyber YouTube fallback (Choice 7) — transcript when show notes are thin
-- [x] Word count gate in `--auto` — auto-falls back to YouTube transcript if <500 words
-- [x] `normalize_cid()` + `CMMC_MISSES` post-run miss report
-- [x] `source_show` locked to canonical values in `ANALYST_PROMPT`
-- [x] Gemini YouTube Ingest (Choice 8) — `gemini-2.0-flash` transcription for restricted/long-form video
-- [x] `gemini_ingest_tool.py` — standalone Gemini transcription script
-- [ ] Cybernews threat actor database + relations
-- [ ] Phoenix Lab VM environment (attack surface testing)
+- [x] Learning plan auto-detection (29 weeks)
+- [x] DARKSWORD v7 — `get_show_notes()` replaces YouTube scraping
+- [x] Autonomous Pipeline (Choice 1) — Simply Cyber show notes
+- [x] OTX Pipeline (Choice 4) — AlienVault threat feed
+- [x] RSS Feed Pipeline (Choice 5) — auto-detects episode date
+- [x] `--auto`, `--auto-otx`, `--auto-barricade` flags — Task Scheduler
+- [x] Barricade Cyber pipeline (Choice 6)
+- [x] Word count gate in `--auto` — YouTube fallback if <500 words
+- [x] Gemini YouTube Ingest (Choice 8)
+- [x] `star_threat_ingest.py` — STAR Strategy pipeline, migrated from AdminOps (2026-08)
+- [x] STAR_STRATEGY_DB_V2 Threat Actors relation — Threat Actor Registry linked
+- [x] `resolve_actor()` — auto-create actor stubs with alias dedup
+- [x] `sanitize_multi_select()` — comma-in-option Notion API fix
+- [x] Darknet Diaries ingest — 168/179 episodes pushed to STAR (2026-08)
+- [x] CrowdStrike Adversary Universe ingest — 7 adversary episodes, Whisper transcription (2026-08)
+- [x] Master Frameworks expanded to 146 controls via FORGE Track 1 (2026-08)
+- [ ] `run_darksword_darknetdiaries.ps1` — Task Scheduler wrapper for DD incremental runs
+- [ ] Cybernews 88-episode backfill — one-time historical sweep (feed parked, data valid)
+- [ ] CrowdStrike incremental monitoring — title classifier for new adversary-profile episodes
+- [ ] `load_cmmc_cache()` root cause trace — SR.L2-3.15.2 4x recurrence, debug-print needed
 
 ---
 
 ## Known Limitations
 
-**`get_transcript()` still blocked for Simply Cyber** — yt-dlp is blocked at the network/IP level for Simply Cyber content. This is no longer a pipeline limitation: V7's Choice 1 uses `get_show_notes()`, and the `--auto` word count gate falls back to `get_barricade_intel()` (YouTubeTranscriptApi, not yt-dlp). `get_transcript()` is retained for reference but not called by any active pipeline.
-
-**`unknown` threat actor shows empty in Notion** — the script skips placeholder values (`none`, `unknown`, `empty`, `n/a`) to prevent noise in the database. This is intentional behavior.
-
-**Barricade RSS may not include a YouTube URL** — if the Transistor feed entry for a Simply Cyber episode has no `yt_videoid` and no YouTube href in `entry.links`, the `--auto` YouTube fallback cannot trigger. The pipeline exits cleanly with a log message.
+- **`get_transcript()` blocked for Simply Cyber** — yt-dlp is blocked at the network/IP level. V7 uses `get_show_notes()` instead; `--auto` falls back to `get_barricade_intel()` (YouTubeTranscriptApi). `get_transcript()` retained for reference only.
+- **`unknown` threat actor shows empty in Notion** — placeholder values (`none`, `unknown`, `empty`, `n/a`) are skipped intentionally to prevent noise.
+- **Darknet Diaries — 5 episodes skipped** — EP14, 174, 175, 177, 178 have no VTT transcript in the RSS feed. Whisper fallback deferred to v2.
+- **CrowdStrike — 71 report/interview episodes out of scope** — only adversary-profile episodes (ALL-CAPS actor name in title) are ingested. Expansion requires a title classifier.
+- **SR.L2-3.15.2 CMMC cache miss (recurring)** — root cause unresolved. Both Control Status filter hypothesis and emoji-in-Name hypothesis ruled out. Debug-print at runtime needed.
 
 ---
 
@@ -325,6 +347,4 @@ Every intel record is automatically linked to relevant GRC learning plan weeks b
 
 MIT — Open source. Use it, fork it, build on it.
 
----
-
-*Built with HardOPS discipline. Manual mastery before automation. Eat your own cooking.* ⚔️💎🦅
+Built with HardOPS discipline. Manual mastery before automation. Eat your own cooking. ⚔️💎🦅

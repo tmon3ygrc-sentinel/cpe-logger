@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DARKSWORD Pipeline Architecture</title>
+<style>
+  :root{
+    --canvas:#151517;
+    --surface:#1E1E20;
+    --raised:#26262A;
+    --text:#FFFFFF;
+    --muted:rgba(255,255,255,.62);
+    --faint:rgba(255,255,255,.42);
+    --border:rgba(255,255,255,.14);
+    --line:rgba(255,255,255,.30);
+    --blue:#5E9FE8;
+    --green:#72BC8F;
+    --orange:#DE9255;
+    --violet:#BF8EDA;
+    --teal:#4FB9C9;
+    --gap:40px;
+    --mono:"Menlo","Consolas",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:var(--canvas);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    font-size:16px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{width:1400px;margin:0 auto;padding:64px 80px 72px;}
+
+  header{
+    position:relative;
+    border-bottom:1px solid var(--border);
+    padding-bottom:40px;margin-bottom:56px;
+  }
+  .kicker{
+    font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--blue);font-weight:600;margin-bottom:18px;
+  }
+  h1{font-size:52px;line-height:1.05;letter-spacing:-.02em;font-weight:650;}
+  h1 .thin{color:var(--faint);font-weight:300;}
+  .lede{margin-top:16px;color:var(--muted);font-size:18px;max-width:720px;}
+  .stats{display:flex;gap:12px;margin-top:32px;flex-wrap:wrap;}
+  .stat{
+    background:var(--surface);border:1px solid var(--border);border-radius:8px;
+    padding:12px 18px;min-width:150px;
+  }
+  .stat b{display:block;font-size:26px;line-height:1.1;letter-spacing:-.01em;}
+  .stat span{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
+
+  .pipeline{margin-bottom:72px;}
+  .pipeline:last-of-type{margin-bottom:0;}
+  .p-head{display:flex;align-items:baseline;gap:16px;margin-bottom:32px;}
+  .p-num{
+    font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.08em;
+    padding:5px 10px;border-radius:6px;
+  }
+  .p-a .p-num{color:var(--blue);background:rgba(94,159,232,.12);}
+  .p-b .p-num{color:var(--violet);background:rgba(191,142,218,.12);}
+  .p-head h2{font-size:26px;font-weight:620;letter-spacing:-.01em;}
+  .p-head .p-sub{color:var(--faint);font-size:14px;margin-left:auto;font-family:var(--mono);}
+
+  .stage{display:flex;align-items:center;gap:14px;margin:0 0 16px;}
+  .stage span{
+    font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);font-weight:600;
+  }
+  .stage i{flex:1;height:1px;background:var(--border);display:block;}
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap);}
+  .center{max-width:520px;margin:0 auto;}
+
+  .card{
+    background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:20px 22px;position:relative;
+  }
+  .card .top{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;}
+  .card h3{font-size:18px;font-weight:600;letter-spacing:-.005em;}
+  .card p{color:var(--muted);font-size:14px;}
+  .card .meta{color:var(--faint);font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;}
+  code,.mono{font-family:var(--mono);font-size:15px;}
+
+  .fn{display:flex;align-items:center;gap:10px;}
+  .fn + .fn{margin-top:12px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.10);}
+  .fn code{color:var(--text);}
+  .tag{
+    font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;
+    padding:3px 8px;border-radius:5px;white-space:nowrap;
+  }
+  .tag.primary{color:var(--green);background:rgba(114,188,143,.14);}
+  .tag.fallback{color:var(--orange);background:rgba(222,146,85,.14);}
+  .tag.auto{color:var(--teal);background:rgba(79,185,201,.14);}
+
+  .src{border-left:3px solid var(--blue);}
+  .p-b .src{border-left-color:var(--violet);}
+  .analyze{background:var(--raised);}
+  .file{
+    display:flex;align-items:center;justify-content:center;gap:12px;
+    border-style:dashed;padding:16px 22px;
+  }
+  .file code{font-size:16px;color:var(--text);}
+  .file .meta{text-transform:none;letter-spacing:0;font-size:13px;}
+
+  .engine{
+    border-color:rgba(94,159,232,.55);
+    background:linear-gradient(180deg,rgba(94,159,232,.13),rgba(94,159,232,.05));
+    text-align:center;padding:24px;
+  }
+  .p-b .engine{border-color:rgba(191,142,218,.55);
+    background:linear-gradient(180deg,rgba(191,142,218,.13),rgba(191,142,218,.05));}
+  .engine .badge{
+    font-size:11px;letter-spacing:.22em;text-transform:uppercase;font-weight:700;color:var(--blue);
+    display:block;margin-bottom:8px;
+  }
+  .p-b .engine .badge{color:var(--violet);}
+  .engine code{font-size:20px;font-weight:600;}
+  .engine p{margin-top:6px;font-size:13.5px;}
+
+  .db{border-left:3px solid var(--green);}
+  .db h3{font-family:var(--mono);font-size:16.5px;}
+  .hub{text-align:center;border-color:rgba(114,188,143,.45);background:rgba(114,188,143,.07);}
+  .hub h3{font-family:var(--mono);font-size:19px;}
+
+  .flow{position:relative;height:44px;}
+  .flow .drop{position:absolute;top:0;bottom:8px;left:calc(50% - 1px);width:2px;background:var(--line);}
+  .flow .head,.join .head{
+    position:absolute;left:calc(50% - 6px);bottom:0;width:0;height:0;
+    border-left:6px solid transparent;border-right:6px solid transparent;
+    border-top:8px solid var(--line);
+  }
+  .flow.two .drop{left:calc(25% - var(--gap)/4);}
+  .flow.two .drop.r{left:calc(75% + var(--gap)/4);}
+  .flow.two .head{left:calc(25% - var(--gap)/4 - 5px);}
+  .flow.two .head.r{left:calc(75% + var(--gap)/4 - 5px);}
+  .join{position:relative;height:60px;}
+  .join .stub{position:absolute;width:2px;background:var(--line);}
+  .join .bar{position:absolute;height:2px;background:var(--line);
+    left:calc(25% - var(--gap)/4);width:calc(50% + var(--gap)/2);}
+  .merge .stub{top:0;height:28px;}
+  .merge .bar{top:26px;}
+  .merge .drop{position:absolute;top:26px;bottom:8px;left:calc(50% - 1px);width:2px;background:var(--line);}
+  .split .drop{position:absolute;top:0;height:28px;left:calc(50% - 1px);width:2px;background:var(--line);}
+  .split .bar{top:26px;}
+  .split .stub{top:26px;bottom:8px;}
+  .join .stub.left{left:calc(25% - var(--gap)/4);}
+  .join .stub.right{left:calc(75% + var(--gap)/4);}
+  .split .head.l{left:calc(25% - var(--gap)/4 - 5px);}
+  .split .head.r{left:calc(75% + var(--gap)/4 - 5px);}
+
+  footer{
+    margin-top:64px;padding-top:24px;border-top:1px solid var(--border);
+    display:flex;gap:28px;align-items:center;flex-wrap:wrap;
+    color:var(--faint);font-size:13px;
+  }
+  .legend{display:flex;align-items:center;gap:8px;}
+  .legend .sw{width:10px;height:10px;border-radius:3px;}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="kicker">Automated Intel → Governance</div>
+    <h1>DARKSWORD <span class="thin">Pipeline Architecture</span></h1>
+    <p class="lede">Two ingestion chains pull open-source threat and narrative intelligence, run it through Claude analysis, and write structured records into five linked Notion databases.</p>
+    <div class="stats">
+      <div class="stat"><b>2</b><span>Pipelines</span></div>
+      <div class="stat"><b>4</b><span>Intel sources</span></div>
+      <div class="stat"><b>5</b><span>Notion databases</span></div>
+      <div class="stat"><b>146</b><span>CMMC 2.0 controls</span></div>
+    </div>
+  </header>
+
+  <section class="pipeline p-a">
+    <div class="p-head">
+      <span class="p-num">01</span>
+      <h2>Governance &amp; CPE Chain</h2>
+      <span class="p-sub">notion_logger_v7.py</span>
+    </div>
+
+    <div class="stage"><span>Sources</span><i></i></div>
+    <div class="row2">
+      <div class="card src">
+        <div class="top"><span class="dot" style="background:var(--blue)"></span><h3>Simply Cyber</h3></div>
+        <p class="meta">Show notes · YouTube</p>
+      </div>
+      <div class="card src">
+        <div class="top"><span class="dot" style="background:var(--blue)"></span><h3>AlienVault OTX</h3></div>
+        <p class="meta">Threat pulse feed</p>
+      </div>
+    </div>
+
+    <div class="flow two"><span class="drop"></span><span class="head"></span><span class="drop r"></span><span class="head r"></span></div>
+    <div class="stage"><span>Collect</span><i></i></div>
+    <div class="row2">
+      <div class="card">
+        <div class="fn"><code>get_show_notes()</code><span class="tag primary">Primary</span></div>
+        <div class="fn"><code>get_barricade_intel()</code><span class="tag fallback">Fallback &lt; 500w</span></div>
+      </div>
+      <div class="card">
+        <div class="fn"><code>get_otx_pulses()</code></div>
+      </div>
+    </div>
+
+    <div class="flow two"><span class="drop"></span><span class="head"></span><span class="drop r"></span><span class="head r"></span></div>
+    <div class="stage"><span>Analyze</span><i></i></div>
+    <div class="row2">
+      <div class="card analyze">
+        <div class="fn"><code>analyze_with_claude()</code></div>
+        <p class="meta" style="margin-top:8px">Narrative + control extraction</p>
+      </div>
+      <div class="card analyze">
+        <div class="fn"><code>analyze_with_claude_prompt()</code></div>
+        <p class="meta" style="margin-top:8px">OTX_ANALYST_PROMPT</p>
+      </div>
+    </div>
+
+    <div class="join merge">
+      <span class="stub left"></span><span class="stub right"></span>
+      <span class="bar"></span><span class="drop"></span><span class="head"></span>
+    </div>
+
+    <div class="stage"><span>Handoff</span><i></i></div>
+    <div class="center">
+      <div class="card file">
+        <code>governance_input.txt</code><span class="meta">merged analysis payload</span>
+      </div>
+    </div>
+
+    <div class="flow"><span class="drop"></span><span class="head"></span></div>
+    <div class="stage"><span>Engine</span><i></i></div>
+    <div class="center">
+      <div class="card engine">
+        <span class="badge">DARKSWORD Engine</span>
+        <code>notion_logger_v7.py</code>
+        <p>Normalizes, scores, and routes every record into Notion</p>
+      </div>
+    </div>
+
+    <div class="flow"><span class="drop"></span><span class="head"></span></div>
+    <div class="stage"><span>Write</span><i></i></div>
+    <div class="center">
+      <div class="card hub">
+        <h3>CPE Tracker DB</h3>
+        <p class="meta" style="margin-top:6px">System of record</p>
+      </div>
+    </div>
+
+    <div class="join split">
+      <span class="drop"></span><span class="bar"></span>
+      <span class="stub left"></span><span class="stub right"></span>
+      <span class="head l"></span><span class="head r"></span>
+    </div>
+
+    <div class="row2">
+      <div class="card db">
+        <h3>Master Frameworks DB</h3>
+        <p style="margin-top:6px">CMMC 2.0 — 146 controls</p>
+      </div>
+      <div class="card db">
+        <h3>GRC Learning Plan DB</h3>
+        <p style="margin-top:6px">Auto-linked by content <span class="tag auto" style="margin-left:6px">Auto</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="pipeline p-b">
+    <div class="p-head">
+      <span class="p-num">02</span>
+      <h2>Narrative &amp; Actor Intel Chain</h2>
+      <span class="p-sub">Claude extraction · STAR</span>
+    </div>
+
+    <div class="stage"><span>Sources</span><i></i></div>
+    <div class="row2">
+      <div class="card src">
+        <div class="top"><span class="dot" style="background:var(--violet)"></span><h3>Darknet Diaries</h3></div>
+        <p class="meta">RSS · VTT</p>
+      </div>
+      <div class="card src">
+        <div class="top"><span class="dot" style="background:var(--violet)"></span><h3>CrowdStrike Adversary Universe</h3></div>
+        <p class="meta">Whisper · on disk</p>
+      </div>
+    </div>
+
+    <div class="flow two"><span class="drop"></span><span class="head"></span><span class="drop r"></span><span class="head r"></span></div>
+    <div class="stage"><span>Transcribe</span><i></i></div>
+    <div class="row2">
+      <div class="card">
+        <div class="fn"><code>fetch RSS → VTT</code></div>
+        <p class="meta" style="margin-top:8px">Transcript pulled per episode</p>
+      </div>
+      <div class="card">
+        <div class="fn"><code>whisper *.txt</code><span class="tag primary">Pre-generated</span></div>
+        <p class="meta" style="margin-top:8px">Local transcript store</p>
+      </div>
+    </div>
+
+    <div class="join merge">
+      <span class="stub left"></span><span class="stub right"></span>
+      <span class="bar"></span><span class="drop"></span><span class="head"></span>
+    </div>
+
+    <div class="stage"><span>Extract</span><i></i></div>
+    <div class="center">
+      <div class="card engine">
+        <span class="badge">Claude Extraction</span>
+        <code>STAR fields + actor ID</code>
+        <p>Situation · Task · Action · Result, plus named adversaries</p>
+      </div>
+    </div>
+
+    <div class="join split">
+      <span class="drop"></span><span class="bar"></span>
+      <span class="stub left"></span><span class="stub right"></span>
+      <span class="head l"></span><span class="head r"></span>
+    </div>
+
+    <div class="stage"><span>Write</span><i></i></div>
+    <div class="row2">
+      <div class="card db">
+        <h3>STAR_STRATEGY_DB_V2</h3>
+        <p style="margin-top:6px">Tactical &amp; strategic GRC lessons</p>
+      </div>
+      <div class="card db">
+        <h3>Threat Actor Registry</h3>
+        <p style="margin-top:6px">Actor stubs <span class="tag auto" style="margin-left:6px">Auto-created</span></p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="legend"><span class="sw" style="background:var(--blue)"></span>Governance chain</div>
+    <div class="legend"><span class="sw" style="background:var(--violet)"></span>Intel chain</div>
+    <div class="legend"><span class="sw" style="background:var(--green)"></span>Notion destination</div>
+    <div class="legend"><span class="sw" style="background:var(--orange)"></span>Fallback path</div>
+    <div style="margin-left:auto">DARKSWORD · pipeline map</div>
+  </footer>
+
+</div>
+</body>
+</html>
