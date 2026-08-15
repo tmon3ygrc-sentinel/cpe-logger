@@ -945,12 +945,14 @@ def load_cmmc_cache(retries: int = 3, delay: int = 15):
         try:
             has_more = True
             cursor   = None
+            total_rows = 0
             while has_more:
                 kwargs = {"database_id": CMMC_DB_ID, "page_size": 100}
                 if cursor:
                     kwargs["start_cursor"] = cursor
                 res = notion.databases.query(**kwargs)
                 for page in res.get("results", []):
+                    total_rows += 1
                     props     = page["properties"]
                     nist_prop = props.get("NIST 800-171 Ref", {}).get("rich_text", [])
                     nist_ref  = nist_prop[0].get("plain_text", "").strip() if nist_prop else ""
@@ -960,7 +962,9 @@ def load_cmmc_cache(retries: int = 3, delay: int = 15):
                         CMMC_CACHE[nist_ref].append((maturity, page["id"]))
                 has_more = res.get("has_more", False)
                 cursor   = res.get("next_cursor")
-            print(f"✅ CMMC cache loaded: {len(CMMC_CACHE)} controls")
+            cached_rows = sum(len(v) for v in CMMC_CACHE.values())
+            skipped_rows = total_rows - cached_rows
+            print(f"✅ CMMC cache loaded: {len(CMMC_CACHE)} distinct NIST ref(s) from {total_rows} Master Frameworks row(s) ({skipped_rows} row(s) with no NIST 800-171 Ref, excluded)")
             return
         except Exception as e:
             err_str = str(e).lower()
