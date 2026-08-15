@@ -14,7 +14,7 @@ Read today's DARKSWORD pipeline log file and produce a concise status report cov
 
 2. Read BOARD.md at `C:\Work\GRC\boards\BOARD.md` (bash: `cat /sessions/*/mnt/boards/BOARD.md`). If the file is not reachable, note: "BOARD.md not accessible — boards\ folder not connected as a workspace folder for this task. Connect C:\Work\GRC\boards in Cowork task settings to enable." and continue without it. If readable, extract: current build hash, any open gates or blocked items, and any upcoming dark days not yet in the Known Dark Days list below — append them mentally for this run.
 
-3. Read the log file at: `C:\Work\GRC\darksword\darksword_YYYY-MM-DD.log` where YYYY-MM-DD is today's date. Use the Read tool or bash (`cat /sessions/*/mnt/darksword/darksword_$(TZ='America/New_York' date +%Y-%m-%d).log`).
+3. Read the log file at: `C:\Work\GRC\darksword\logs\darksword_YYYY-MM-DD.log` where YYYY-MM-DD is today's date. Use the Read tool or bash (`cat /sessions/*/mnt/darksword/logs/darksword_$(TZ='America/New_York' date +%Y-%m-%d).log`).
 
 4. If the log file does not exist, first check whether today's date falls in the **Known Dark Days** list below. If it does, report: "No episode expected today ({reason}) — pipeline correctly found nothing to process. Not a failure." and stop; do not use the ❌/⚠️ verdict language for this case. If today's date is NOT in the list, report: "No log file found for today — pipeline may not have run." and use verdict ❌ Failed (or flag for investigation).
 
@@ -53,6 +53,6 @@ When the user mentions a future hiatus in conversation, a scheduled-task update 
 
 ## Constraints
 - Never modify any files.
-- Log file path uses Windows-style paths; in bash use the mount path: `/sessions/*/mnt/darksword/darksword_$(TZ='America/New_York' date +%Y-%m-%d).log`
+- Log file path uses Windows-style paths; in bash use the mount path: `/sessions/*/mnt/darksword/logs/darksword_$(TZ='America/New_York' date +%Y-%m-%d).log`
 - BOARD.md bash path: `/sessions/*/mnt/boards/BOARD.md`
 - If `failed_records.txt` at `C:\Work\GRC\darksword\failed_records.txt` has entries matching today's date, include them in the Failures section.
