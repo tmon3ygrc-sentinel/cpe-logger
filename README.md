@@ -36,6 +36,7 @@ subgraph P1["01 · Governance &amp; CPE Chain"]
   direction TB
   SC["Simply Cyber<br/>show notes · YouTube"]
   OTX["AlienVault OTX<br/>threat pulse feed"]
+  BC["Barricade Cyber<br/>YouTube · RSS"]
 
   SN["get_show_notes()<br/>PRIMARY"]
   BI["get_barricade_intel()<br/>FALLBACK · under 500 words"]
@@ -53,6 +54,7 @@ subgraph P1["01 · Governance &amp; CPE Chain"]
 
   SC --> SN
   SC -.->|thin show notes| BI
+  BC --> BI
   SN --> AC
   BI --> AC
   OTX --> OP --> ACP
@@ -90,7 +92,7 @@ classDef engine fill:#E8ECFB,stroke:#5E6FD6,color:#1d2450,font-weight:bold;
 classDef db fill:#E8F1EC,stroke:#46A171,color:#153524;
 classDef fallback fill:#FBEBDE,stroke:#D5803B,color:#4a2c11;
 
-class SC,OTX,DD,CSA source;
+class SC,OTX,BC,DD,CSA source;
 class SN,OP,AC,ACP,GI,DDT,CST step;
 class BI fallback;
 class ENG,EX engine;
@@ -123,7 +125,7 @@ Interactive version: [`darksword-pipeline.html`](docs/assets/darksword-pipeline.
 
 | Database | Script | Source | Purpose |
 |---|---|---|---|
-| CPE Tracker | `notion_logger_v7.py` | Simply Cyber, AlienVault OTX | Tactical threat intel, CMMC mapping |
+| CPE Tracker | `notion_logger_v7.py` | Simply Cyber, AlienVault OTX, Barricade Cyber | Tactical threat intel, CMMC mapping |
 | STAR Strategy DB V2 | `darknetdiaries_ingest.py`, `crowdstrike_ingest.py` | Darknet Diaries, CrowdStrike Adversary Universe | Strategic GRC intel, actor-linked |
 | Threat Actor Registry | `darknetdiaries_ingest.py`, `crowdstrike_ingest.py` | Auto-created from ingest | Actor stubs with classification and aliases |
 | Master Frameworks | shared | CMMC 2.0 / NIST 800-171 (146 controls) | Control mapping source of truth |
@@ -185,7 +187,7 @@ cpe   # launches via alias
 
 ### Darknet Diaries Pipeline (`darknetdiaries_ingest.py`)
 
-Fetches RSS, pulls VTT transcripts (173/179 episodes have transcripts), runs Claude extraction per episode, resolves threat actors against the Threat Actor Registry, and pushes to STAR_STRATEGY_DB_V2.
+Fetches RSS, pulls VTT transcripts, runs Claude extraction per episode, resolves threat actors against the Threat Actor Registry, and pushes to STAR_STRATEGY_DB_V2. 168/173 episodes ingested (173/179 had VTT transcripts, 6 had none).
 
 ```bash
 python darknetdiaries_ingest.py --dry-run       # preview without writing
@@ -219,7 +221,7 @@ python crowdstrike_ingest.py                    # live run
 | Simply Cyber | Show Notes | Daily tactical threat briefs | ✅ Live (auto + interactive) |
 | AlienVault OTX | Threat Feed | IOC feeds, pulse intelligence | ✅ Live (auto + interactive) |
 | Barricade Cyber | YouTube | DFIR, MSP/enterprise ops | ✅ Live (auto + interactive) |
-| Darknet Diaries | RSS/VTT | Deep-dive threat actor narratives | ✅ Live — 168/179 episodes ingested |
+| Darknet Diaries | RSS/VTT | Deep-dive threat actor narratives | ✅ Live — 168/173 episodes ingested |
 | CrowdStrike Adversary Universe | Whisper/disk | Adversary profiles (SPIDER, PANDA, CHOLLIMA taxonomy) | ✅ Live — 7 adversary episodes ingested |
 | Cybernews | YouTube | Threat actor profiles | ⏸ Parked — feed dormant since May 2025; 88-episode backfill queued |
 
@@ -323,7 +325,7 @@ Every CPE Tracker record is automatically linked to relevant GRC learning plan w
 - [x] STAR_STRATEGY_DB_V2 Threat Actors relation — Threat Actor Registry linked
 - [x] `resolve_actor()` — auto-create actor stubs with alias dedup
 - [x] `sanitize_multi_select()` — comma-in-option Notion API fix
-- [x] Darknet Diaries ingest — 168/179 episodes pushed to STAR (2026-08)
+- [x] Darknet Diaries ingest — 168/173 episodes pushed to STAR (2026-08)
 - [x] CrowdStrike Adversary Universe ingest — 7 adversary episodes, Whisper transcription (2026-08)
 - [x] Master Frameworks expanded to 146 controls via FORGE Track 1 (2026-08)
 - [ ] `run_darksword_darknetdiaries.ps1` — Task Scheduler wrapper for DD incremental runs
