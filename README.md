@@ -15,7 +15,7 @@ Nation-state actors and ransomware operators are already leveraging AI to scale 
 
 DARKSWORD exists to close that gap.
 
-A solo GRC analyst with a spreadsheet isn't a fair fight against an AI-augmented adversary. But a GRC analyst running an autonomous intelligence pipeline that ingests multiple threat feeds daily, maps every story to CMMC 2.0 controls, maintains a living audit trail, and surfaces critical threat intensity across 146 controls — that's a different posture entirely.
+A solo GRC analyst with a spreadsheet isn't a fair fight against an AI-augmented adversary. But a GRC analyst running an autonomous intelligence pipeline that ingests multiple threat feeds daily, maps every story to CMMC 2.0 controls, maintains a living audit trail, and surfaces critical threat intensity across 145 controls — that's a different posture entirely.
 
 This project is proof that defenders can use the same technology to build leverage. Not to replace analyst judgment — but to amplify it.
 
@@ -49,7 +49,7 @@ subgraph P1["01 · Governance &amp; CPE Chain"]
   ENG["notion_logger_v7.py<br/>DARKSWORD Engine"]
 
   CPE[("CPE Tracker DB")]
-  MF[("Master Frameworks DB<br/>CMMC 2.0 — 146 controls")]
+  MF[("Master Frameworks DB<br/>145 controls — CMMC 2.0 · NIST 800-171 · NIST AI RMF")]
   GRC[("GRC Learning Plan DB<br/>auto-linked by content")]
 
   SC --> SN
@@ -108,7 +108,7 @@ class CPE,MF,GRC,STAR,TAR db;
 | Analysis | `analyze_with_claude()` and `analyze_with_claude_prompt()` using `OTX_ANALYST_PROMPT` | Single Claude extraction pass for STAR fields and actor identification |
 | Handoff | `governance_input.txt` | in-memory, no intermediate file |
 | Engine | `notion_logger_v7.py` (DARKSWORD Engine) | Claude extraction writes directly |
-| Destinations | CPE Tracker DB, then Master Frameworks DB (CMMC 2.0 — 146 controls) and GRC Learning Plan DB | STAR_STRATEGY_DB_V2 and Threat Actor Registry |
+| Destinations | CPE Tracker DB, then Master Frameworks DB (145 controls — CMMC 2.0, NIST 800-171, NIST AI RMF) and GRC Learning Plan DB | STAR_STRATEGY_DB_V2 and Threat Actor Registry |
 
 <details>
 <summary>Static diagram (rendered infographic)</summary>
@@ -128,7 +128,7 @@ Interactive version: [`darksword-pipeline.html`](docs/assets/darksword-pipeline.
 | CPE Tracker | `notion_logger_v7.py` | Simply Cyber, AlienVault OTX, Barricade Cyber | Tactical threat intel, CMMC mapping |
 | STAR Strategy DB V2 | `darknetdiaries_ingest.py`, `crowdstrike_ingest.py` | Darknet Diaries, CrowdStrike Adversary Universe | Strategic GRC intel, actor-linked |
 | Threat Actor Registry | `darknetdiaries_ingest.py`, `crowdstrike_ingest.py` | Auto-created from ingest | Actor stubs with classification and aliases |
-| Master Frameworks | shared | CMMC 2.0 / NIST 800-171 (146 controls) | Control mapping source of truth |
+| Master Frameworks | shared | CMMC 2.0 / NIST 800-171 / NIST AI RMF (145 controls) | Control mapping source of truth |
 | GRC Learning Plan | shared | Internal | Auto-linked from control domains |
 
 ---
@@ -282,7 +282,7 @@ Requires `gitleaks` on PATH. Scans staged changes and blocks commits containing 
 
 ## CMMC Cache
 
-The script queries the Master Frameworks database at launch and builds an in-memory cache of all CMMC 2.0 controls. Currently loaded: **146 controls** (128 base + 18 added via FORGE Track 1, 2026-08).
+The script queries the Master Frameworks database at launch and builds an in-memory cache indexed by `NIST 800-171 Ref`. Master Frameworks holds **145 rows total**, spanning CMMC 2.0 (142), NIST 800-171 Rev 3 (2), and NIST AI RMF (1). The cache reports **123 distinct NIST refs** — lower than the row count because the `NIST 800-171 Ref` property strips the domain/level prefix, so CMMC L1/L2 pairs citing the same underlying control (e.g. `AC.L1-3.1.1` and `AC.L2-3.1.1`) share one ref key; `resolve_control()` disambiguates by maturity level. One row (`MAP.1.5`, NIST AI RMF) has no NIST 800-171 ref and is correctly excluded from the cache.
 
 `normalize_cid()` strips whitespace and normalizes case before cache lookups. Unresolved IDs are tracked in `CMMC_MISSES` and printed post-run.
 
@@ -327,7 +327,7 @@ Every CPE Tracker record is automatically linked to relevant GRC learning plan w
 - [x] `sanitize_multi_select()` — comma-in-option Notion API fix
 - [x] Darknet Diaries ingest — 168/173 episodes pushed to STAR (2026-08)
 - [x] CrowdStrike Adversary Universe ingest — 7 adversary episodes, Whisper transcription (2026-08)
-- [x] Master Frameworks expanded to 146 controls via FORGE Track 1 (2026-08)
+- [x] Master Frameworks expanded to 145 controls via FORGE Track 1 (2026-08)
 - [ ] `run_darksword_darknetdiaries.ps1` — Task Scheduler wrapper for DD incremental runs
 - [ ] Cybernews 88-episode backfill — one-time historical sweep (feed parked, data valid)
 - [ ] CrowdStrike incremental monitoring — title classifier for new adversary-profile episodes
