@@ -28,3 +28,31 @@ Current build: 8c399cb on main.
     because the postinstall got gated. Re-running with `--allow-scripts`
     scoped to the package fixed it clean.
 
+- **This project's venv is `C:\Work\GRC\.venv` — always activate it
+  explicitly before any `pip` command, never assume it's already active.**
+  Other project venvs exist side-by-side on this machine (e.g. the old
+  `GRC-OCEG` project). Running `pip install -r requirements.txt` while a
+  *different* venv is activated silently installs into the wrong
+  environment — no error, no warning, just a Darksword pipeline that's
+  quietly missing whatever wasn't in that install. And since
+  `requirements.txt` only ever gets updated when someone notices a gap, any
+  package that was originally added ad hoc (`pip install <pkg>` without a
+  matching `requirements.txt` commit) doesn't survive a rebuild — it just
+  isn't declared, so the reinstall never restores it.
+  - Before any `pip install -r requirements.txt`: confirm which venv is
+    active first — check the prompt prefix, or run
+    `python -c "import sys; print(sys.prefix)"` and verify it's
+    `C:\Work\GRC\.venv`.
+  - Explicit activation, every time, not "it was probably still active
+    from earlier": `& C:\Work\GRC\.venv\Scripts\Activate.ps1`
+  - Any manually `pip install`-ed package must get a matching
+    `requirements.txt` commit in the same session — otherwise it's one
+    rebuild away from silently vanishing.
+  - Traced 2026-08-20: `torch` and `OTXv2` (and, separately, `bs4` on
+    2026-08-14) went missing from `C:\Work\GRC\.venv` because a
+    `pip install -r requirements.txt` was run on 2026-08-10 while
+    `C:\Work\GRC-OCEG\.venv` was the active venv, against a
+    `requirements.txt` that never declared those packages — they'd only
+    ever been installed ad hoc. Full forensics: `boards\BOARD.md`,
+    2026-08-20 OPS entries.
+
