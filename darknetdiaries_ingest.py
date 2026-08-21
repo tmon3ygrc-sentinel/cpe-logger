@@ -354,16 +354,22 @@ def resolve_actor(name: str, actor_cache: dict, dry_run: bool = False) -> str:
 # ─── STAGE 6 -- STAR ROW PUSH ────────────────────────────────────────────────
 
 def sanitize_multi_select(items: list) -> list:
-    """Strip parenthetical clauses from each item before it becomes a Notion
-    multi_select option name. AO fix, 2026-08-11: Claude sometimes returns an
-    attack_technique as a single descriptive phrase with a comma-bearing
-    parenthetical -- "Reconnaissance via social media (LinkedIn, Facebook,
-    Reddit)" -- and Notion's API hard-rejects commas inside a multi_select
-    option name, failing the whole row (live-confirmed: EP10/102/104/126 of
-    the full backfill). Stripping the parenthetical rather than replacing
-    the comma keeps the option name shorter and avoids inventing punctuation
-    Claude didn't write."""
-    return [re.sub(r'\s*\(.*?\)', '', str(item)).strip() for item in items]
+    """Strip commas (and parenthetical clauses) from each item before it
+    becomes a Notion multi_select option name -- Notion's API hard-rejects
+    any comma inside a multi_select value, regardless of context.
+    """
+    result = []
+    for item in items:
+        # Strip parenthetical sub-clauses first (existing logic)
+        cleaned = re.sub(r'\s*\(.*?\)', '', str(item)).strip()
+        # Then strip any remaining commas (bare commas outside parens,
+        # e.g. "Store Now, Decrypt Later")
+        cleaned = cleaned.replace(',', '')
+        # Collapse any double-spaces left behind
+        cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+        if cleaned:
+            result.append(cleaned)
+    return result
 
 
 def _to_multi_select(values) -> list:

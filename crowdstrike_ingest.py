@@ -404,13 +404,22 @@ def _build_source_url_cache(max_retries: int = 3, delay: float = 2.0) -> set:
 # ─── STAGE 5 -- STAR ROW PUSH ────────────────────────────────────────────────
 
 def sanitize_multi_select(items: list) -> list:
-    """Copied verbatim from darknetdiaries_ingest.py -- strip parenthetical
-    clauses from each item before it becomes a Notion multi_select option
-    name. Notion's API hard-rejects commas inside a multi_select option name
-    (live-confirmed on the DD backfill: EP10/102/104/126 lost their whole row
-    on this exception), and Claude can return the same comma-bearing
-    parenthetical shape here."""
-    return [re.sub(r'\s*\(.*?\)', '', str(item)).strip() for item in items]
+    """Strip commas (and parenthetical clauses) from each item before it
+    becomes a Notion multi_select option name -- Notion's API hard-rejects
+    any comma inside a multi_select value, regardless of context.
+    """
+    result = []
+    for item in items:
+        # Strip parenthetical sub-clauses first (existing logic)
+        cleaned = re.sub(r'\s*\(.*?\)', '', str(item)).strip()
+        # Then strip any remaining commas (bare commas outside parens,
+        # e.g. "Store Now, Decrypt Later")
+        cleaned = cleaned.replace(',', '')
+        # Collapse any double-spaces left behind
+        cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+        if cleaned:
+            result.append(cleaned)
+    return result
 
 
 def _to_multi_select(values) -> list:
