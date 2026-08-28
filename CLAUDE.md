@@ -56,3 +56,17 @@ Current build: 8c399cb on main.
     ever been installed ad hoc. Full forensics: `boards\BOARD.md`,
     2026-08-20 OPS entries.
 
+## Lab architecture
+
+Phoenix Lab includes physical hardware, not only VMs — the existing
+VM-based infra (`PHX-DC-01`, `pfSense-Core.vmx`, tracked/frozen via
+Terraform per `boards\BOARD.md`'s 2026-07-21 reconciliation) is still
+real and unchanged; this adds a physical node alongside it, it does not
+replace it.
+
+- **Current node: `phx-kali-01`** — Raspberry Pi, aarch64.
+- **IP:** `10.0.40.153`, on the `HardOps-Lab-5G` network segment
+  (`10.0.40.x`).
+- **Auth:** SSH key-based (no password auth).
+- **Management:** headless, administered from Windows via SSH.
+
